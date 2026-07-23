@@ -1,48 +1,123 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zero-Shot Agent — Transform</title>
-  <link rel="stylesheet" href="styles.css" />
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>UP Police — Data Analyst</title>
+ <meta name="description" content="On-prem natural-language analysis for UP Police operational data.">
+ <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <h1>Zero-Shot Agent</h1>
-      <span id="provider-badge" class="badge" title="Active LLM provider">…</span>
-    </header>
+ <div class="app">
+  <!-- Header -->
+  <header class="app-header">
+   <div class="brand">
+    <span class="shield" aria-hidden="true">&#x1F6E1;</span>
+    <div>
+     <h1>UP Police Data Analyst</h1>
+     <p class="tagline">Ask a question. Get the answer with evidence.</p>
+    </div>
+   </div>
+   <div class="db-status" id="db-status" role="status" aria-live="polite">Checking database&hellip;</div>
+  </header>
 
-    <!-- CAPABILITY SLOT — replace this form with your agent's UI -->
-    <section class="card" id="transform-card">
-      <h2>Transform text</h2>
-      <p class="hint">The baseline capability: give it text and an instruction; it applies the
-        instruction with one real LLM call.</p>
+  <!-- Main -->
+  <main class="main">
+   <!-- Question -->
+   <section class="question-section" aria-label="Question">
+    <label class="sr-only" for="question-input">Your question</label>
+    <textarea
+     id="question-input"
+     rows="3"
+     placeholder="e.g., Compare challan counts by district for the last 30 days."
+     disabled
+     aria-describedby="question-help"
+    ></textarea>
+    <button id="submit-btn" class="primary-btn" disabled type="button">Ask</button>
+    <p id="question-help" class="help-text">One question at a time. Data never leaves this network.</p>
+   </section>
 
-      <label for="instruction">Instruction</label>
-      <input id="instruction" type="text"
-             value="Summarize the text in one short paragraph." />
+   <!-- Stubs: clearly labelled non-functional -->
+   <div class="stub-banner" role="note" aria-label="Upcoming features">
+    &#128190; <strong>CSV Upload</strong> — Phase 2.&#32;
+    &#128190; <strong>PDF Export</strong> — Phase 2.
+   </div>
 
-      <label for="text">Text</label>
-      <textarea id="text" rows="8"
-                placeholder="Paste the text to transform…"></textarea>
+   <!-- Progress -->
+   <section class="progress-section" id="progress-section" hidden aria-label="Progress">
+    <div class="progress-label" id="progress-label">Step 1/5 — Planning</div>
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-bar">
+     <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+    </div>
+    <div class="step-labels">
+     <span data-step="0">Plan</span>
+     <span data-step="1">SQL</span>
+     <span data-step="2">Validate</span>
+     <span data-step="3">Execute</span>
+     <span data-step="4">Explain</span>
+    </div>
+   </section>
 
-      <button id="run-btn">Run</button>
+   <!-- Answer -->
+   <section class="answer-section" id="answer-section" hidden>
+    <h2>Answer</h2>
+    <p class="answer-meta" id="answer-meta"></p>
+    <p class="answer-text" id="answer-text"></p>
 
-      <div id="status" class="status" hidden></div>
-      <div id="error" class="error" hidden></div>
+    <!-- Generated SQL (collapsible) -->
+    <details class="sql-details">
+     <summary>&#128269; Generated SQL — click to expand</summary>
+     <pre class="sql-block"><code id="sql-code"></code></pre>
+     <button class="copy-btn" id="copy-sql-btn" type="button">Copy SQL</button>
+    </details>
 
-      <div id="result-wrap" hidden>
-        <h3>Result</h3>
-        <pre id="result"></pre>
-        <p class="meta" id="result-meta"></p>
-      </div>
-    </section>
+    <!-- Data table -->
+    <div class="table-wrapper">
+     <table class="data-table" id="data-table">
+      <thead id="table-head"></thead>
+      <tbody id="table-body"></tbody>
+     </table>
+     <div class="table-meta" id="table-meta"></div>
+    </div>
 
-    <footer class="foot">
-      <span>API docs at <a href="/docs">/docs</a> · health at <a href="/health">/health</a></span>
-    </footer>
+    <!-- Chart -->
+    <div class="chart-container" id="chart-container">
+     <canvas id="chart-canvas" width="640" height="320"></canvas>
+     <div class="chart-fallback" id="chart-fallback" hidden></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-row">
+     <a id="csv-link" class="download-link" href="#" download rel="nofollow">
+      &#128190; Download CSV
+     </a>
+    </div>
+
+    <!-- Anomalies -->
+    <div class="anomalies-section" id="anomalies-section" hidden>
+     <h3>Flagged Anomalies</h3>
+     <ul class="anomaly-list" id="anomaly-list"></ul>
+    </div>
+
+    <!-- Follow-ups -->
+    <div class="followups-section" id="followups-section" hidden>
+     <h3>Suggested follow-ups</h3>
+     <p class="help-text">Pick one to continue.</p>
+     <ul class="followup-list" id="followup-list"></ul>
+    </div>
+   </section>
+
+   <!-- Error -->
+   <section class="error-section" id="error-section" hidden aria-live="assertive">
+    <div class="error-card">
+     <strong>Couldn't process that request.</strong>
+     <p id="error-text"></p>
+     <p class="error-hint">Try rephrasing, or narrowing the date range / location.</p>
+    </div>
+   </section>
   </main>
-  <script src="app.js"></script>
+ </div>
+
+ <script src="app.js"></script>
 </body>
 </html>

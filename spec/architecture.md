@@ -1,68 +1,85 @@
-# Architecture
-
-> Fill in this section — see comments below.
-
----
+# Architecture — UP Police Data Analyst Agent
 
 ## System Overview
 
-<!-- FILL IN: One paragraph describing the system at a high level. Who/what interacts with it? -->
+A FastAPI service running on-prem inside the UP Police intranet. Officers open a browser to a single URL and type natural-language questions. A LangGraph agent (powered by Anthropic Claude) plans the question into SQL, validates it, executes it against a live MsSQL database (or a local SQLite fallback), and returns an anomaly-flagged answer with a data table, chart, and CSV download link. All rows stay on-prem; only the question text goes to Anthropic.
 
 ## Component Map
 
-<!-- FILL IN: List the major components and what each does. -->
-
-```
-[Component A]
-    ↓
-[Component B]   ←→   [External Service]
-    ↓
-[Component C]
+```text
+Officer (browser)
+    │
+    ▼
+FastAPI server (port 8001)
+    │
+    ├─▶ LangGraph agent graph
+    │       plan_node ──▶ sql_gen_node ──▶ validate_node ──▶ execute_node ──▶ explain_node
+    │
+    ├─▶ DB layer (pyodbc → MsSQL, or SQLite local fallback)
+    │
+    ├─▶ Cache layer (in-process dict keyed on question hash — Phase 1)
+    │
+    ├─▶ Audit logger (sync writes to SQLite audit table on every completed query)
+    │
+    └─▶ Static file server ── frontend (single-page app)
 ```
 
 ## Layers
 
-<!-- FILL IN: Describe the layers of the system (e.g., API → Agent Loop → Tools → Storage). -->
-
 | Layer | Responsibility |
-|-------|----------------|
-| <!-- layer --> | <!-- responsibility --> |
+|---|---|
+| **API** | HTTP endpoints: `/health`, `/api/query`, `/api/download-csv`. Validates input, manages streaming SSE response. |
+| **Agent Loop (LangGraph)** | Orchestrates the multi-step reasoning chain for each user question. |
+| **Tools** | `generate_sql`, `validate_sql` (dry-run on DB), `run_query`, `build_answer`, `suggest_followups`. |
+| **Storage** | Operational DB (MsSQL read-only, SELECT-only service account) + local SQLite (session state + audit log + dev fallback). |
+| **Frontend** | Vanilla JS/HTML single-page app; no build step — copied straight to `frontend/public/`. |
 
 ## Data Flow
 
-<!-- FILL IN: Walk through the main data flow from trigger to output. -->
-
-1. Trigger: <!-- how does the agent start? (cron, webhook, user input, etc.) -->
-2. <!-- step 2 -->
-3. <!-- step 3 -->
-4. Output: <!-- what does the agent produce? -->
+1. **Trigger:** Officer submits a question in the web UI
+2. **Plan:** Agent generates a short analysis plan (what to aggregate/filter/group)
+3. **SQL:** Agent generates a SQL query from the plan against the DB schema
+4. **Validate:** SQL is dry-run (SET FMTONLY ON / sp_describe_first_result_set equivalent) against the live DB; errors are caught and fed back to the LLM for repair (one retry)
+5. **Execute:** Validated SQL runs against MsSQL (SELECT only). Result rows materialised in memory.
+6. **Explain:** Agent detects anomalies (top outliers vs mean, period-over-period changes) and writes a plain-English answer with error-bounded numeric claims
+7. **Output:** JSON response → frontend renders text + SQL reveal + data table + bar/time-series chart + CSV download link
+8. **Audit:** Query, SQL, row count, duration, timestamp, and any errors are persisted to the audit SQLite table
 
 ## External Dependencies
 
-<!-- FILL IN: APIs, services, databases the agent depends on. -->
-
 | Dependency | Purpose | Failure Mode |
-|------------|---------|--------------|
-| <!-- name --> | <!-- what it does --> | <!-- what happens if it's down --> |
+|---|---|---|
+| **Anthropic API** | NL→SQL reasoning | Agent returns a clear error: "Analyst service temporarily unavailable — your question was not run." No DB action taken. |
+| **MsSQL server** | Operational data | If unreachable, app returns "Database unreachable — contact IT." Auto-falls back to local SQLite if `AGENT_DATABASE_URL` points there. |
+| **Local SQLite** | Audit log + dev fallback | Non-critical; if it fails, query still executes but no audit is recorded — operator is warned. |
 
 ## Stack
 
-> This project's concrete technology choices (captured at intake, filled by the spec-writer). The generic, every-project rules — model-naming, DB driver, dev port, test environment — live in `harness/patterns/tech-stack.md`; this section is only what **this** project picked.
-
-- **Language:** <!-- FILL IN: e.g., Python 3.12 -->
-- **Agent framework:** <!-- FILL IN: e.g., LangGraph / custom / none -->
-- **LLM provider + model:** <!-- FILL IN: e.g., Anthropic / claude-sonnet-4-6 -->
-- **Backend:** <!-- FILL IN: e.g., FastAPI / none -->
-- **Database + ORM:** <!-- FILL IN: e.g., PostgreSQL + SQLAlchemy 2.0 / none -->
-- **Frontend:** <!-- FILL IN: e.g., Next.js / none -->
-- **Dependency management:** <!-- FILL IN: e.g., uv + pyproject.toml -->
+- **Language:** Python 3.11+
+- **Agent framework:** LangGraph (built-in in the baseline harness)
+- **LLM provider + model:** Anthropic / `claude-3-5-sonnet-20240620`
+- **Backend:** FastAPI (baseline) + Uvicorn
+- **Database + drivers:** MsSQL via `pyodbc` (production) + SQLite via `aiosqlite` (local dev / audit)
+- **Frontend:** Vanilla HTML/JS/CSS — zero build step, served as static files
+- **Dependency management:** `uv` + `pyproject.tomol`
+- **Migrations:** Alembic
 
 | Key library | Version | Purpose |
-|-------------|---------|---------|
-| <!-- name --> | <!-- ver --> | <!-- purpose --> |
+|---|---|---|
+| `langgraph` | latest | Agent graph orchestration |
+| `anthropic` | >=0.39 | Claude API client |
+| `pyodbc` | >=5.0 | MsSQL driver |
+| `aiosqlite` | >=0.20 | Async SQLite (audit log) |
+| `sqlalchemy` | 2.0 | ORM / schema reflection |
+| `alembic` | latest | DB migrations |
+| `uvicorn[standard]` | latest | ASGI server |
+| `httpx` | latest | LLM client fallback/pings |
 
-**Avoid:** <!-- FILL IN: libraries/patterns explicitly off-limits, and why -->
+**Avoid:** pandas-heavy preprocessing (Phase 1 rows returned directly; pandas is a Phase 2 option if needed). Avoid async MsSQL drivers — pyodbc is synchronous and suffices inside FastAPI's threadpool.
 
 ## Deployment Model
 
-<!-- FILL IN: How does this run? (local script, cloud function, long-running service, etc.) -->
+- Long-running service on a single on-prem Windows/Linux server behind the police intranet reverse proxy
+- Single `uv run python -m src` startup; no Docker requirement in Phase 1
+- Config via `.env` file (gitignored); serves on `PORT` (default 8001)
+- MsSQL connection string in `AGENT_DATABASE_URL`; switch between MsSQL and SQLite with one env change

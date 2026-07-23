@@ -7,7 +7,7 @@ def test_run_row_roundtrip():
     with create_db_session() as s:
         run = RunRow(input_text="hello", instruction="upper", status="running")
         s.add(run)
-        s.flush()
+        s.commit()
         run_id = run.id
     with create_db_session() as s:
         row = s.get(RunRow, run_id)

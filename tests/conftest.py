@@ -1,48 +1,63 @@
-"""Shared fixtures.
-
-Every test gets: reset settings/db singletons + an isolated tmp SQLite DB.
-Unit tests additionally blank the provider keys; integration tests keep the
-real key from .env (that is the point of the gate).
-"""
+"""tests/conftest.py — test configuration and shared fixtures."""
 from __future__ import annotations
+
+import os
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def _reset_singletons():
+def reset_singletons():
     """Reset cached settings + engine so env patches take effect per test."""
     import src.config.settings as settings_mod
     import src.db.session as session_mod
 
     settings_mod._settings = None
-    session_mod._engine = None
-    session_mod._SessionLocal = None
+    for attr in ("_engine", "_ENGINE", "_SessionLocal", "_SESSION_MAKER"):
+        if hasattr(session_mod, attr):
+            try:
+                val = getattr(session_mod, attr)
+                if hasattr(val, "dispose"):
+                    val.dispose()
+            except Exception:
+                pass
+            setattr(session_mod, attr, None)
     yield
     settings_mod._settings = None
-    if session_mod._engine is not None:
-        session_mod._engine.dispose()
-    session_mod._engine = None
-    session_mod._SessionLocal = None
+    for attr in ("_engine", "_ENGINE", "_SessionLocal", "_SESSION_MAKER"):
+        if hasattr(session_mod, attr):
+            try:
+                val = getattr(session_mod, attr)
+                if hasattr(val, "dispose"):
+                    val.dispose()
+            except Exception:
+                pass
+            setattr(session_mod, attr, None)
 
 
-@pytest.fixture(autouse=True)
-def _isolated_db(tmp_path, monkeypatch):
-    """Point the app at a fresh SQLite file — never the user's real DB."""
-    monkeypatch.setenv("AGENT_DATABASE_URL", f"sqlite:///{tmp_path}/test.db")
-    yield
+@pytest.fixture()
+def temp_db(tmp_path, monkeypatch):
+    """Point the app at a fresh SQLite file."""
+    db_path = str(tmp_path / "test.db")
+    monkeypatch.setenv("AGENT_DATABASE_URL", f"sqlite:///{db_path}")
+    yield db_path
+
+
+# Backward-compat alias used by existing tests
+@pytest.fixture()
+def isolated_db(temp_db):
+    return temp_db
 
 
 @pytest.fixture()
 def no_keys(monkeypatch):
-    """Simulate 'no provider key configured' regardless of the user's .env.
-
-    Env vars override .env values in pydantic-settings, so empty strings are
-    enough — the file itself is never touched.
-    """
+    """Blank all LLM keys."""
     monkeypatch.setenv("AGENT_LLM_PROVIDER", "auto")
     monkeypatch.setenv("AGENT_LLM_MODEL", "")
     monkeypatch.setenv("AGENT_ANTHROPIC_API_KEY", "")
     monkeypatch.setenv("AGENT_GEMINI_API_KEY", "")
     monkeypatch.setenv("AGENT_OPENROUTER_API_KEY", "")
-    yield
+    monkeypatch.setenv("AGENT_OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    # Force reload of settings singleton
+    import src.config.settings as settings_mod
+    settings_mod._settings = None

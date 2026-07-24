@@ -28,11 +28,12 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
 
-    from src.api import health, queries, runs
+    from src.api import health, queries, runs, uploads
 
     app.include_router(health.router)
     app.include_router(queries.router)
     app.include_router(runs.router)
+    app.include_router(uploads.router)
 
     if _FRONTEND_DIR.is_dir():
         app.mount("/app", StaticFiles(directory=_FRONTEND_DIR, html=True), name="frontend")

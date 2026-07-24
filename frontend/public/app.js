@@ -46,23 +46,24 @@
   // Health check
   // ---------------------------------------------------------------------------
   async function checkHealth() {
-    try {
-      const res = await fetch("/health");
-      const data = await res.json();
-      if (res.ok && data.status === "ok") {
-        setDbStatus("Connected ✓", "ok");
-        questionInput.disabled = false;
-        submitBtn.disabled = false;
-      } else if (data.status === "fallback_sqlite") {
-        setDbStatus("Fallback (SQLite) — limited data", "warn");
-        questionInput.disabled = false;
-        submitBtn.disabled = false;
-      } else {
-        setDbStatus("Unreachable — contact IT", "error");
-      }
-    } catch {
+  try {
+    const res = await fetch("/health");
+    const payload = await res.json();
+    const status = (payload && payload.data && payload.data.status) || "";
+    if (res.ok && status === "ok") {
+      setDbStatus("Connected ✓", "ok");
+      questionInput.disabled = false;
+      submitBtn.disabled = false;
+    } else if (status === "fallback_sqlite") {
+      setDbStatus("Fallback (SQLite) — limited data", "warn");
+      questionInput.disabled = false;
+      submitBtn.disabled = false;
+    } else {
       setDbStatus("Unreachable — contact IT", "error");
     }
+  } catch {
+    setDbStatus("Unreachable — contact IT", "error");
+  }
   }
 
   function setDbStatus(text, status) {
@@ -344,7 +345,6 @@
       copySqlBtn.textContent = "Copied!";
       setTimeout(() => { copySqlBtn.textContent = prev; }, 1500);
     } catch {
-      // Fallback: select the block
       const range = document.createRange();
       range.selectNodeContents(sqlCodeEl);
       const sel = window.getSelection();
@@ -354,7 +354,51 @@
   });
 
   // ---------------------------------------------------------------------------
+  // CSV Upload (Phase 2)
+  // ---------------------------------------------------------------------------
+  const fileInput = document.getElementById("csv-file-input");
+  const uploadBtn = document.getElementById("upload-btn");
+  const uploadStatus = document.getElementById("upload-status");
+  const uploadMessage = document.getElementById("upload-message");
+  const uploadMeta = document.getElementById("upload-meta");
+
+  if (fileInput && uploadBtn) {
+    fileInput.addEventListener("change", () => {
+      uploadBtn.disabled = !fileInput.files?.length;
+    });
+
+    uploadBtn.addEventListener("click", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      uploadBtn.disabled = true;
+      uploadStatus.hidden = false;
+      uploadMessage.textContent = "Uploading…";
+      uploadMeta.textContent = "";
+
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-csv", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.detail || data.error || "Upload failed.");
+        }
+        uploadMessage.textContent = data.message || "Upload complete.";
+        uploadMeta.textContent = `Table: ${data.table_name}\nRows: ${data.row_count}\nColumns: ${(data.columns || []).join(", ")}`;
+      } catch (err) {
+        uploadMessage.textContent = err.message || "Upload error.";
+      } finally {
+        uploadBtn.disabled = true;
+      }
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------------
   checkHealth();
-})();
+  })();

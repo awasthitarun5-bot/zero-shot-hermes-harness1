@@ -37,11 +37,21 @@
     <p id="question-help" class="help-text">One question at a time. Data never leaves this network.</p>
    </section>
 
-   <!-- Stubs: clearly labelled non-functional -->
-   <div class="stub-banner" role="note" aria-label="Upcoming features">
-    &#128190; <strong>CSV Upload</strong> — Phase 2.&#32;
-    &#128190; <strong>PDF Export</strong> — Phase 2.
+   <!-- CSV Upload (Phase 2) -->
+   <section class="upload-section" aria-label="Upload CSV">
+   <div class="upload-card">
+   <h3>Upload CSV</h3>
+   <p class="help-text">Import a local CSV to query alongside the live database. Max 500k rows, 200 MB.</p>
+   <div class="upload-controls">
+   <input type="file" id="csv-file-input" accept=".csv" />
+   <button id="upload-btn" class="primary-btn" type="button" disabled>Upload</button>
    </div>
+   <div id="upload-status" class="upload-status" hidden>
+   <div class="upload-message" id="upload-message"></div>
+   <div class="upload-meta" id="upload-meta"></div>
+   </div>
+   </div>
+   </section>
 
    <!-- Progress -->
    <section class="progress-section" id="progress-section" hidden aria-label="Progress">

@@ -94,7 +94,7 @@
 
     try {
       const start = Date.now();
-      const res = await fetch("/api/query", {
+      const res = await fetch("/query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
@@ -379,7 +379,7 @@
       try {
         const fd = new FormData();
         fd.append("file", file);
-        const res = await fetch("/api/upload-csv", {
+        const res = await fetch("/upload-csv", {
           method: "POST",
           body: fd,
         });

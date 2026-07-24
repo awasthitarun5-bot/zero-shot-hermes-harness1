@@ -127,7 +127,7 @@ def _serialize(state: AgentState, run_id: str) -> dict[str, Any]:
 
     csv_url = None
     if not state.get("failed") and state.get("result_rows") and state.get("result_columns"):
-        csv_url = f"/api/download-csv?session_id={run_id}"
+        csv_url = f"/download-csv?session_id={run_id}"
 
     return {
         "answer": state.get("answer"),
